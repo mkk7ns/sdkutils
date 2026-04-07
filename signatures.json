@@ -1,0 +1,239 @@
+{
+  "_meta": {
+    "tool": "Mobile App SDK Static Discovery tool",
+    "author": "Michael Krueger",
+    "contact": "mkrueger@nowsecure.com",
+    "license": "MIT"
+  },
+  "signatures": {
+    "Firebase": {
+      "category": "analytics",
+      "patterns": [
+        "com\\.google\\.firebase",
+        "\\bfirebase(?:analytics|messaging|crashlytics|perf(?:ormance)?|remoteconfig|installations|auth|database|core)\\b",
+        "\\bgoogleappmeasurement\\b",
+        "\\bFIR[A-Z][A-Za-z0-9_]*\\b",
+        "google-services\\.json",
+        "GoogleService-Info\\.plist"
+      ]
+    },
+    "AppsFlyer": {
+      "category": "attribution",
+      "patterns": [
+        "com\\.appsflyer",
+        "\\bappsflyer(?:lib|tracker)?\\b",
+        "appsflyer\\.com",
+        "AppsFlyerLib"
+      ]
+    },
+    "Adjust": {
+      "category": "attribution",
+      "patterns": [
+        "com\\.adjust",
+        "adjust\\.com",
+        "\\bAdjust(?:Sdk|Config|Event|Attribution)\\b"
+      ]
+    },
+    "Braze": {
+      "category": "messaging",
+      "patterns": [
+        "com\\.(?:braze|appboy)",
+        "\\b(?:braze|appboy)(?:sdk|kit|ui)?\\b",
+        "braze\\.com"
+      ]
+    },
+    "Segment": {
+      "category": "analytics",
+      "patterns": [
+        "com\\.segment\\.analytics",
+        "segment\\.io",
+        "analytics-ios",
+        "analytics-android",
+        "\\bSEGAnalytics\\b"
+      ]
+    },
+    "Mixpanel": {
+      "category": "analytics",
+      "patterns": [
+        "com\\.mixpanel",
+        "mixpanel\\.com",
+        "\\bMixpanel(?:API|People|Instance)?\\b"
+      ]
+    },
+    "Amplitude": {
+      "category": "analytics",
+      "patterns": [
+        "com\\.amplitude",
+        "amplitude\\.com",
+        "\\bAmplitude(?:Client|Analytics)?\\b"
+      ]
+    },
+    "Sentry": {
+      "category": "crash_reporting",
+      "patterns": [
+        "io\\.sentry",
+        "sentry\\.io",
+        "\\bSentrySDK\\b",
+        "sentry-(?:android|cocoa)"
+      ]
+    },
+    "Datadog": {
+      "category": "observability",
+      "patterns": [
+        "com\\.datadog",
+        "dd-sdk",
+        "datadoghq\\.com"
+      ]
+    },
+    "FullStory": {
+      "category": "session_replay",
+      "patterns": [
+        "com\\.fullstory",
+        "fullstory\\.com",
+        "\\bFS(?:Session|Page|Identify|Restart)\\b"
+      ]
+    },
+    "Airship": {
+      "category": "messaging",
+      "patterns": [
+        "com\\.(?:urbanairship|airship)",
+        "urbanairship",
+        "airship\\.com",
+        "\\bUAirship\\b"
+      ]
+    },
+    "OneSignal": {
+      "category": "messaging",
+      "patterns": [
+        "com\\.onesignal",
+        "onesignal\\.com",
+        "\\bOneSignal\\b"
+      ]
+    },
+    "LaunchDarkly": {
+      "category": "feature_flags",
+      "patterns": [
+        "com\\.launchdarkly",
+        "launchdarkly\\.com",
+        "\\bLDClient\\b"
+      ]
+    },
+    "Optimizely": {
+      "category": "feature_flags",
+      "patterns": [
+        "com\\.optimizely",
+        "optimizely\\.com",
+        "\\bOptimizely(?:Client|Manager|SDK)?\\b"
+      ]
+    },
+    "Facebook SDK": {
+      "category": "analytics_ads",
+      "patterns": [
+        "com\\.facebook",
+        "\\bFBSDK[A-Za-z0-9_]*\\b",
+        "facebook\\.com",
+        "graph\\.facebook\\.com"
+      ]
+    },
+    "Google Ads / AdMob": {
+      "category": "ads",
+      "patterns": [
+        "com\\.google\\.android\\.gms\\.ads",
+        "\\bGAD[A-Z][A-Za-z0-9_]*\\b",
+        "\\b(?:admob|googlemobileads)\\b",
+        "doubleclick\\.net",
+        "googlesyndication"
+      ]
+    },
+    "Stripe": {
+      "category": "payments",
+      "patterns": [
+        "com\\.stripe",
+        "stripe\\.com",
+        "\\bSTP[A-Z][A-Za-z0-9_]*\\b",
+        "\\bStripe(?:API|SDK|Client|Payment)\\b"
+      ]
+    },
+    "Braintree": {
+      "category": "payments",
+      "patterns": [
+        "com\\.braintree",
+        "braintreepayments",
+        "\\bBT[A-Z][A-Za-z0-9_]*\\b"
+      ]
+    },
+    "Intercom": {
+      "category": "support_chat",
+      "patterns": [
+        "io\\.intercom",
+        "intercom\\.io",
+        "\\bIntercom(?:SDK|Client)?\\b"
+      ]
+    },
+    "OpenAI": {
+      "category": "ai_remote",
+      "patterns": [
+        "api\\.openai\\.com",
+        "openai[-_./](?:api|sdk|client|kit)",
+        "com\\.openai",
+        "\\bOpenAI(?:API|Client|SDK)?\\b",
+        "\\bgpt-[0-9a-z.-]+\\b"
+      ]
+    },
+    "Anthropic": {
+      "category": "ai_remote",
+      "patterns": [
+        "api\\.anthropic\\.com",
+        "anthropic[-_./](?:sdk|api|client)",
+        "com\\.anthropic",
+        "\\bAnthropic(?:API|Client|SDK)?\\b",
+        "\\bclaude-[0-9a-z.-]+\\b"
+      ]
+    },
+    "LangChain": {
+      "category": "ai_orchestration",
+      "patterns": [
+        "langchain(?:[-_.](?:core|community|openai|anthropic))?",
+        "\\bLCEL\\b"
+      ]
+    },
+    "Llama / llama.cpp": {
+      "category": "ai_local",
+      "patterns": [
+        "llama\\.cpp",
+        "\\b(?:llama_(?:model|context|token)|llama-cpp|llamacpp)\\b"
+      ]
+    },
+    "ONNX Runtime": {
+      "category": "ai_local",
+      "patterns": [
+        "ai\\.onnxruntime",
+        "onnxruntime",
+        "\\bOrt(?:Session|Env|Value|Allocator)\\b"
+      ]
+    },
+    "ML Kit": {
+      "category": "ai_local",
+      "patterns": [
+        "com\\.google\\.mlkit",
+        "\\bmlkit(?:barcode|vision|translate|face|text)?\\b"
+      ]
+    },
+    "MediaPipe": {
+      "category": "ai_local",
+      "patterns": [
+        "com\\.google\\.mediapipe",
+        "\\bmediapipe(?:tasks|framework)?\\b"
+      ]
+    },
+    "TensorFlow Lite": {
+      "category": "ai_local",
+      "patterns": [
+        "org\\.tensorflow\\.lite",
+        "\\btensorflowlite\\b",
+        "\\btflite\\b",
+        "\\bInterpreter(?:Api|Factory|Options)?\\b"
+      ]
+    }
+  }
+}
