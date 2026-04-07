@@ -2,6 +2,10 @@
 
 Utility scripts for SDK and mobile app analysis.
 
+## Table of Contents
+
+- [SDK Finder](#sdk-finder)
+
 Written by Michael Krueger, mkrueger@nowsecure.com.
 
 Released under the MIT License.
