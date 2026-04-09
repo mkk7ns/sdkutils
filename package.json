@@ -1,0 +1,17 @@
+{
+  "name": "sdkutils",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Utility scripts for SDK and mobile app analysis.",
+  "license": "MIT",
+  "scripts": {
+    "build:agent": "frida-compile agent.js -o _agent.js"
+  },
+  "dependencies": {
+    "frida": "^16.7.19",
+    "frida-java-bridge": "^7.1.4"
+  },
+  "devDependencies": {
+    "frida-compile": "^16.4.1"
+  }
+}

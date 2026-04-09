@@ -5,6 +5,7 @@ Utility scripts for SDK and mobile app analysis.
 ## Table of Contents
 
 - [SDK Finder](#sdk-finder)
+- [Frida Class Scan](#frida-class-scan)
 
 Written by Michael Krueger, mkrueger@nowsecure.com.
 
@@ -210,3 +211,88 @@ python3 sdk_finder.py Payload/MyApp.app --signatures signatures.json
 - Some Android native libraries have generic names and may not identify the vendor clearly.
 - Optional JADX scanning improves recall but depends on JADX being installed and working.
 - Signature quality matters more than regex quantity. Tight, vendor-specific markers outperform broad word matches.
+
+## Frida Class Scan
+
+`frida-classScan.js` performs a runtime Android scan over loaded Java classes and native library loads using a compiled Frida agent. It now reads the same regex-based `signatures.json` file used by `sdk_finder.py`, so there is a single signature source in the repo.
+
+### Build
+
+Install the Node dependencies and compile the Frida agent bundle:
+
+```bash
+npm install
+npm run build:agent
+```
+
+This produces `_agent.js`, which is the compiled bundle loaded by the host script.
+
+### Usage
+
+Spawn a package and scan from process start:
+
+```bash
+node frida-classScan.js com.example.app --spawn
+```
+
+Attach to an already running PID:
+
+```bash
+node frida-classScan.js 12345 --attach
+```
+
+Use a custom compiled agent or signature file:
+
+```bash
+node frida-classScan.js com.example.app --spawn --agent ./_agent.js --signatures ./signatures.json
+```
+
+### Command-Line Flags
+
+### Required
+
+- `target`
+  - Android package name when using `--spawn`
+  - Numeric PID when using `--attach`
+
+- `--spawn`
+  - Spawn the target package, attach, and then resume execution.
+
+- `--attach`
+  - Attach to an already-running process by PID.
+
+### Optional
+
+- `--signatures <path>`
+  - Path to the signature file.
+  - Default: `./signatures.json`
+  - Expected format: top-level `signatures` object containing SDK names with `patterns` arrays.
+
+- `--agent <path>`
+  - Path to the compiled Frida bundle.
+  - Default: `./_agent.js`
+
+- `--device-timeout <ms>`
+  - Timeout when waiting for `frida.getUsbDevice(...)`.
+  - Default: `5000`
+
+- `--no-color`
+  - Disable ANSI color output in match and warning lines.
+
+- `-h`, `--help`
+  - Print the usage text and exit.
+
+### Runtime Evidence Types
+
+The Frida scanner currently emits these runtime evidence classes:
+
+- `JAVA_CLASS`
+- `JAVA_LOAD_LIB`
+- `NATIVE_DLOPEN`
+
+### Notes and Limitations
+
+- The Frida workflow is Android-focused and expects a reachable USB device through Frida.
+- The agent must be compiled before use; the host script does not compile it automatically.
+- Runtime regex matching against broad patterns can produce noisier hits than the static scanner if patterns are too generic.
+- Native detection depends on `android_dlopen_ext` or `dlopen` being available in the target process.
