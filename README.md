@@ -214,37 +214,45 @@ python3 sdk_finder.py Payload/MyApp.app --signatures signatures.json
 
 ## Frida Class Scan
 
-`frida-classScan.js` performs a runtime Android scan over loaded Java classes and native library loads using a compiled Frida agent. It now reads the same regex-based `signatures.json` file used by `sdk_finder.py`, so there is a single signature source in the repo.
+`frida-androidClassScan.js` performs a runtime Android scan over loaded Java classes and native library loads using a compiled Frida agent. It now reads the same regex-based `signatures.json` file used by `sdk_finder.py`, so there is a single signature source in the repo.
 
 ### Build
 
-Install the Node dependencies and compile the Frida agent bundle:
+From the repo root, install the Node dependencies and compile the Frida agent bundle:
 
 ```bash
 npm install
 npm run build:agent
 ```
 
-This produces `_agent.js`, which is the compiled bundle loaded by the host script.
+`npm install` uses the dependencies declared in `package.json`.
+
+`npm run build:agent` runs `frida-compile agent.js -o _agent.js` and produces `_agent.js`, which is the compiled bundle loaded by the host script.
+
+If you change [`agent.js`](/Users/mkrueger/Desktop/Projects/sdkutils/agent.js), rebuild `_agent.js` before running the scanner again.
 
 ### Usage
 
 Spawn a package and scan from process start:
 
 ```bash
-node frida-classScan.js com.example.app --spawn
+npm install
+npm run build:agent
+node frida-androidClassScan.js com.example.app --spawn
 ```
 
 Attach to an already running PID:
 
 ```bash
-node frida-classScan.js 12345 --attach
+npm install
+npm run build:agent
+node frida-androidClassScan.js 12345 --attach
 ```
 
 Use a custom compiled agent or signature file:
 
 ```bash
-node frida-classScan.js com.example.app --spawn --agent ./_agent.js --signatures ./signatures.json
+node frida-androidClassScan.js com.example.app --spawn --agent ./_agent.js --signatures ./signatures.json
 ```
 
 ### Command-Line Flags

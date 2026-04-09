@@ -8,8 +8,8 @@ const DEFAULT_DEVICE_TIMEOUT = 5000;
 
 function usage() {
     console.log(`Usage:
-  node frida-classScan.js <package> --spawn [options]
-  node frida-classScan.js <pid> --attach [options]
+  node frida-androidClassScan.js <package> --spawn [options]
+  node frida-androidClassScan.js <pid> --attach [options]
 
 Options:
   --spawn                 Spawn the target package, attach, then resume it
