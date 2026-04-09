@@ -1,3 +1,5 @@
 node_modules/
 _agent.js
+_agentAndroidClasses.js
+_agentAndroidNetworkSignatures.js
 base.apk

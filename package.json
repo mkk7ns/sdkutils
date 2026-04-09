@@ -5,7 +5,9 @@
   "description": "Utility scripts for SDK and mobile app analysis.",
   "license": "MIT",
   "scripts": {
-    "build:agent": "frida-compile agent.js -o _agent.js"
+    "build:frida": "npm run build:androidClasses && npm run build:androidNetworkSignatures",
+    "build:androidClasses": "frida-compile agentAndroidClasses.js -o _agentAndroidClasses.js",
+    "build:androidNetworkSignatures": "frida-compile agentAndroidNetworkSignatures.js -o _agentAndroidNetworkSignatures.js"
   },
   "dependencies": {
     "frida": "^17.2.17",

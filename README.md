@@ -6,6 +6,7 @@ Utility scripts for SDK and mobile app analysis.
 
 - [SDK Finder](#sdk-finder)
 - [Frida Class Scan](#frida-class-scan)
+- [Frida Network Signatures](#frida-network-signatures)
 
 Written by Michael Krueger, mkrueger@nowsecure.com.
 
@@ -222,14 +223,20 @@ From the repo root, install the Node dependencies and compile the Frida agent bu
 
 ```bash
 npm install
-npm run build:agent
+npm run build:androidClasses
 ```
 
 `npm install` uses the dependencies declared in `package.json`.
 
-`npm run build:agent` runs `frida-compile agent.js -o _agent.js` and produces `_agent.js`, which is the compiled bundle loaded by the host script.
+To build every Frida agent bundle in one step, run:
 
-If you change [`agent.js`](/Users/mkrueger/Desktop/Projects/sdkutils/agent.js), rebuild `_agent.js` before running the scanner again.
+```bash
+npm run build:frida
+```
+
+`npm run build:androidClasses` runs `frida-compile agentAndroidClasses.js -o _agentAndroidClasses.js` and produces `_agentAndroidClasses.js`, which is the compiled bundle loaded by the host script.
+
+If you change [`agentAndroidClasses.js`](/Users/mkrueger/Desktop/Projects/sdkutils/agentAndroidClasses.js), rebuild `_agentAndroidClasses.js` before running the scanner again.
 
 ### Usage
 
@@ -237,7 +244,7 @@ Spawn a package and scan from process start:
 
 ```bash
 npm install
-npm run build:agent
+npm run build:androidClasses
 node frida-androidClassScan.js com.example.app --spawn
 ```
 
@@ -245,14 +252,14 @@ Attach to an already running PID:
 
 ```bash
 npm install
-npm run build:agent
+npm run build:androidClasses
 node frida-androidClassScan.js 12345 --attach
 ```
 
 Use a custom compiled agent or signature file:
 
 ```bash
-node frida-androidClassScan.js com.example.app --spawn --agent ./_agent.js --signatures ./signatures.json
+node frida-androidClassScan.js com.example.app --spawn --agent ./_agentAndroidClasses.js --signatures ./signatures.json
 ```
 
 ### Command-Line Flags
@@ -278,7 +285,7 @@ node frida-androidClassScan.js com.example.app --spawn --agent ./_agent.js --sig
 
 - `--agent <path>`
   - Path to the compiled Frida bundle.
-  - Default: `./_agent.js`
+  - Default: `./_agentAndroidClasses.js`
 
 - `--device-timeout <ms>`
   - Timeout when waiting for `frida.getUsbDevice(...)`.
@@ -304,3 +311,146 @@ The Frida scanner currently emits these runtime evidence classes:
 - The agent must be compiled before use; the host script does not compile it automatically.
 - Runtime regex matching against broad patterns can produce noisier hits than the static scanner if patterns are too generic.
 - Native detection depends on `android_dlopen_ext` or `dlopen` being available in the target process.
+
+## Frida Network Signatures
+
+`frida-androidNetworkSignatures.js` performs an Android runtime network scan using a compiled Frida agent. It hooks common Java and OkHttp networking paths, inspects call stacks, and correlates those stacks with SDK signature data to highlight likely third-party network activity.
+
+### Build
+
+From the repo root, install the Node dependencies and compile the network-signature agent bundle:
+
+```bash
+npm install
+npm run build:androidNetworkSignatures
+```
+
+To build every Frida agent bundle in one step, run:
+
+```bash
+npm run build:frida
+```
+
+`npm run build:androidNetworkSignatures` runs `frida-compile agentAndroidNetworkSignatures.js -o _agentAndroidNetworkSignatures.js`.
+
+If you change [`agentAndroidNetworkSignatures.js`](/Users/mkrueger/Desktop/Projects/sdkutils/agentAndroidNetworkSignatures.js), rebuild `_agentAndroidNetworkSignatures.js` before running the scanner again.
+
+### Usage
+
+Spawn a package and monitor network-related stack traces:
+
+```bash
+npm install
+npm run build:androidNetworkSignatures
+node frida-androidNetworkSignatures.js com.example.app --spawn
+```
+
+Attach to an already running PID:
+
+```bash
+npm install
+npm run build:androidNetworkSignatures
+node frida-androidNetworkSignatures.js 12345 --attach
+```
+
+### Command-Line Flags
+
+### Required
+
+- `target`
+  - Android package name when using `--spawn`
+  - Numeric PID when using `--attach`
+
+- `--spawn`
+  - Spawn the target package, attach, and then resume execution.
+
+- `--attach`
+  - Attach to an already-running process by PID.
+  - This mode requires a numeric PID.
+
+### Optional
+
+- `--signatures <path>`
+  - Path to the signature file.
+  - Default: `./signatures.json`
+  - Expected format: top-level `signatures` object containing SDK names with `patterns` arrays.
+
+- `--agent <path>`
+  - Path to the compiled Frida bundle.
+  - Default: `./_agentAndroidNetworkSignatures.js`
+
+- `--device-timeout <ms>`
+  - Timeout when waiting for `frida.getUsbDevice(...)`.
+  - Default: `5000`
+
+- `--no-color`
+  - Disable ANSI color output in match and warning lines.
+
+- `-h`, `--help`
+  - Print the usage text and exit.
+
+### Runtime Hooks and Behavior
+
+The network-signature agent currently installs hooks on:
+
+- `java.net.URL.openConnection`
+- `java.net.URLConnection.connect`
+- `java.net.URLConnection.getInputStream`
+- `java.net.URLConnection.getOutputStream`
+- `javax.net.ssl.HttpsURLConnection.connect`
+- `okhttp3.RealCall.execute`
+- `okhttp3.RealCall.enqueue`
+- `okhttp3.OkHttpClient.newCall`
+- `okhttp3.internal.http.CallServerInterceptor.intercept`
+
+The agent behavior is:
+
+- capture a stack trace when one of the hooked networking methods is reached
+- derive SDK-related namespaces heuristically from `signatures.json` regex patterns
+- match stack frames and network targets against both derived namespaces and regex patterns
+- emit a network attribution event when a stack implicates a known SDK
+- throttle repeated alerts for the same SDK, hook, target, and match set
+
+### Output and Diagnostics
+
+The host script can emit:
+
+- `[NETWORK STACK MATCH]`
+  - runtime network attribution event
+  - SDK name
+  - hook that triggered the event
+  - target URL or request representation when available
+  - matched namespaces
+  - matched regex patterns
+  - top portion of the Java stack trace
+  - this means a hooked network call occurred and the captured stack trace implicated a known SDK
+
+- `[SIGNATURE MATCH]`
+  - direct pattern hit emitted by the agent when applicable
+  - this is a simpler signal than `[NETWORK STACK MATCH]`
+  - in the current network scanner, this is typically produced when a concrete runtime target string itself matches a configured SDK pattern
+
+- `[DEBUG]`
+  - agent-side diagnostic messages about hook installation and initialization
+
+- `[AGENT ERROR]`
+  - agent-side error reports for hook setup or hook execution failures
+
+- `[SCRIPT ERROR]`
+  - Frida script runtime errors surfaced by the host
+
+- `[SESSION DETACHED]`
+  - the Frida session detached from the target process
+  - may indicate normal termination, disconnect, or a target crash
+
+- `[SESSION DETACHED]`
+  - session detach/crash notification from the Frida host
+
+### Notes and Limitations
+
+- This script is Android-only in its current form.
+- It uses the same `signatures.json` format as `sdk_finder.py` and `frida-androidClassScan.js`.
+- It currently uses the compiled `_agentAndroidNetworkSignatures.js` bundle path by default.
+- The matching path is focused on runtime Java/OkHttp stack attribution rather than broad startup class enumeration.
+- The current stable hook set is limited to `java.net`, `HttpsURLConnection`, and `okhttp3` paths.
+- Namespace attribution is derived heuristically from regex patterns and currently keeps up to the first three namespace segments.

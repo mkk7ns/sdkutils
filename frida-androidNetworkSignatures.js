@@ -2,20 +2,20 @@ const frida = require('frida');
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULT_AGENT_PATH = path.join(__dirname, '_agentAndroidClasses.js');
+const DEFAULT_AGENT_PATH = path.join(__dirname, '_agentAndroidNetworkSignatures.js');
 const DEFAULT_SIGNATURES_PATH = path.join(__dirname, 'signatures.json');
 const DEFAULT_DEVICE_TIMEOUT = 5000;
 
 function usage() {
     console.log(`Usage:
-  node frida-androidClassScan.js <package> --spawn [options]
-  node frida-androidClassScan.js <pid> --attach [options]
+  node frida-androidNetworkSignatures.js <package> --spawn [options]
+  node frida-androidNetworkSignatures.js <pid> --attach [options]
 
 Options:
   --spawn                 Spawn the target package, attach, then resume it
   --attach                Attach to an already-running numeric PID
   --signatures <path>     Signature JSON file to load (default: ./signatures.json)
-  --agent <path>          Compiled Frida agent bundle (default: ./_agentAndroidClasses.js)
+  --agent <path>          Compiled Frida agent bundle (default: ./_agentAndroidNetworkSignatures.js)
   --device-timeout <ms>   Timeout for locating the USB device (default: 5000)
   --no-color              Disable ANSI color output
   -h, --help              Show this help text`);
@@ -130,7 +130,7 @@ async function run() {
     const options = parseArgs(process.argv.slice(2));
 
     if (!fs.existsSync(options.agentPath)) {
-        fail(`Agent bundle not found at ${options.agentPath}. Run: npm install && npm run build:agent`);
+        fail(`Agent bundle not found at ${options.agentPath}. Run: npm install && npm run build:networkHookAndAlert`);
     }
 
     if (!fs.existsSync(options.signaturesPath)) {
@@ -162,29 +162,63 @@ async function run() {
     const source = fs.readFileSync(options.agentPath, 'utf8');
     const script = await session.createScript(source);
 
+    session.detached.connect((reason, crash) => {
+        console.error(colorize(`[SESSION DETACHED] reason=${reason}`, '31', options.color));
+        if (crash) {
+            console.error(`    crash: ${JSON.stringify(crash)}`);
+        }
+    });
+
     script.message.connect((message) => {
-        if (message.type !== 'send' || !message.payload) {
-            if (message.type === 'error') {
-                console.error(message.stack || message.description || message);
+        if (message.type === 'error') {
+            console.error(colorize(`[SCRIPT ERROR] ${message.description || 'Unknown error'}`, '31', options.color));
+            if (message.stack) {
+                console.error(message.stack);
             }
+            return;
+        }
+
+        if (message.type !== 'send' || !message.payload) {
             return;
         }
 
         const payload = message.payload;
 
-        if (payload.type === 'match') {
+        if (payload.type === 'DEBUG') {
+            console.log(colorize(`[DEBUG] ${payload.message}`, '90', options.color));
+            if (payload.extra) {
+                console.log(`    ${JSON.stringify(payload.extra)}`);
+            }
+            return;
+        }
+
+        if (payload.type === 'AGENT_ERROR') {
+            console.error(colorize(`[AGENT ERROR] ${payload.where}: ${payload.error}`, '31', options.color));
+            if (payload.stack) {
+                console.error(payload.stack);
+            }
+            return;
+        }
+
+        if (payload.type === 'NETWORK_STACK_MATCH') {
+            console.log(colorize(`[NETWORK STACK MATCH] ${payload.sdkName}`, '36', options.color));
+            console.log(`    Hook: ${payload.hook}`);
+            console.log(`    Target: ${payload.evidence}`);
+            if ((payload.matchedNamespaces || []).length > 0) {
+                console.log(`    Namespace Match: ${payload.matchedNamespaces.join(', ')}`);
+            }
+            if ((payload.matchedPatterns || []).length > 0) {
+                console.log(`    Pattern Match: ${payload.matchedPatterns.join(', ')}`);
+            }
+            if (payload.stackTop) {
+                console.log(`    Stack:\n${payload.stackTop}`);
+            }
+            return;
+        }
+
+        if (payload.type === 'SIGNATURE_MATCH') {
             console.log(colorize(`[SIGNATURE MATCH] ${payload.sdkName}`, '33', options.color));
             console.log(`    Evidence: ${payload.evidence} (${payload.evidenceType})`);
-            return;
-        }
-
-        if (payload.type === 'warning') {
-            console.warn(colorize(`[WARN] ${payload.message}`, '31', options.color));
-            return;
-        }
-
-        if (payload.type === 'ready') {
-            console.log(`[!] Agent loaded with ${payload.loadedSignatureCount} signatures.`);
         }
     });
 
@@ -201,7 +235,7 @@ async function run() {
         await device.resume(spawnedPid);
     }
 
-    console.log(`[!] Scanning ${appPackage || options.target} using ${signatureMap.length} signatures from ${options.signaturesPath}`);
+    console.log(`[!] Monitoring ${appPackage || options.target} with ${signatureMap.length} signatures from ${options.signaturesPath}`);
 }
 
 run().catch((error) => {
