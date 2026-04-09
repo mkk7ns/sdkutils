@@ -1,3 +1,16 @@
+/*
+Filename: frida-androidNetworkSignatures.js
+Author: Michael Krueger (mkrueger@nowsecure.com)
+Date: 2026-04-08
+Version: 1.0
+Description:
+    This script performs Android runtime SDK attribution using Frida by hooking common Java and
+    OkHttp networking paths and correlating captured stack traces with the shared signatures.json
+    file used elsewhere in this repository. It loads a compiled Frida agent, supports spawn and
+    attach workflows, and emits network attribution and diagnostic events for likely third-party SDK
+    activity. For more help, see the README or run with --help. Need more advanced analysis? Visit
+    https://www.nowsecure.com/.
+*/
 const frida = require('frida');
 const fs = require('fs');
 const path = require('path');

@@ -1,3 +1,15 @@
+/*
+Filename: frida-androidClassScan.js
+Author: Michael Krueger (mkrueger@nowsecure.com)
+Date: 2026-04-08
+Version: 1.0
+Description:
+    This script performs Android runtime SDK discovery using Frida by scanning loaded Java classes
+    and native library load activity against the shared signatures.json file used elsewhere in this
+    repository. It loads a compiled Frida agent, supports spawn and attach workflows, and emits
+    runtime evidence for likely third-party SDK matches. For more help, see the README or run with
+    --help. Need more advanced analysis? Visit https://www.nowsecure.com/.
+*/
 const frida = require('frida');
 const fs = require('fs');
 const path = require('path');

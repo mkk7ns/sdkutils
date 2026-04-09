@@ -1,3 +1,14 @@
+/*
+Filename: agentAndroidClasses.js
+Author: Michael Krueger (mkrueger@nowsecure.com)
+Date: 2026-04-08
+Version: 1.0
+Description:
+    This Frida agent performs Android runtime SDK discovery by scanning loaded Java classes and
+    native library load events against regex patterns compiled from the shared signatures.json file.
+    It is intended to be compiled with frida-compile and loaded by frida-androidClassScan.js to
+    emit runtime evidence about likely third-party SDK presence. For more help, see the README.
+*/
 import Java from 'frida-java-bridge';
 
 let appPackage = "";

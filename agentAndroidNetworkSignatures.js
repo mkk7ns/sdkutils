@@ -1,3 +1,15 @@
+/*
+Filename: agentAndroidNetworkSignatures.js
+Author: Michael Krueger (mkrueger@nowsecure.com)
+Date: 2026-04-08
+Version: 1.0
+Description:
+    This Frida agent performs Android runtime SDK network attribution by hooking common Java and
+    OkHttp networking APIs, capturing stack traces, and correlating them with regex patterns derived
+    from the shared signatures.json file. It is intended to be compiled with frida-compile and
+    loaded by frida-androidNetworkSignatures.js to emit attribution and diagnostic events for likely
+    third-party SDK network activity. For more help, see the README.
+*/
 import Java from 'frida-java-bridge';
 
 let appPackage = "";
