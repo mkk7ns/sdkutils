@@ -13,14 +13,17 @@ Description:
 """
 import argparse
 import collections
+import concurrent.futures
 import csv
 import json
+import os
 import plistlib
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 from typing import Optional
@@ -130,6 +133,42 @@ def print_status(message: str, enabled: bool = True) -> None:
         print(f"[sdk_finder] {message}", file=sys.stderr, flush=True)
 
 
+def print_progress(prefix: str, current: int, total: int, enabled: bool = True) -> None:
+    if not enabled or total <= 0:
+        return
+    width = 30
+    filled = min(width, int((current / total) * width))
+    bar = "#" * filled + "-" * (width - filled)
+    print(
+        f"\r[sdk_finder] {prefix} [{bar}] {current}/{total}",
+        file=sys.stderr,
+        end="",
+        flush=True,
+    )
+    if current >= total:
+        print(file=sys.stderr, flush=True)
+
+
+def should_emit_progress_update(
+    current: int,
+    total: int,
+    last_percent_bucket: int,
+    file_step: int = 25,
+    percent_step: int = 5,
+) -> tuple[bool, int]:
+    if total <= 0:
+        return False, last_percent_bucket
+
+    percent_bucket = min(100, (current * 100) // total)
+    reached_percent_step = percent_bucket >= last_percent_bucket + percent_step
+    reached_file_step = current % file_step == 0
+    is_boundary = current == 1 or current == total
+
+    if is_boundary or reached_percent_step or reached_file_step:
+        return True, percent_bucket
+    return False, last_percent_bucket
+
+
 def run_strings(path: Path) -> str:
     try:
         result = subprocess.run(
@@ -212,6 +251,25 @@ def load_signatures(path: Path) -> dict:
     return data["signatures"]
 
 
+def compile_signatures(signatures: dict) -> list[dict]:
+    compiled = []
+    for sdk_name, meta in signatures.items():
+        category = meta.get("category", "unknown")
+        patterns = []
+        for pat in meta.get("patterns", []):
+            try:
+                patterns.append(re.compile(pat, re.IGNORECASE))
+            except re.error:
+                continue
+        if patterns:
+            compiled.append({
+                "sdk_name": sdk_name,
+                "category": category,
+                "patterns": patterns,
+            })
+    return compiled
+
+
 def classify_evidence(source: str, snippet: str) -> str:
     s = source.lower()
     snip = snippet.lower()
@@ -268,19 +326,24 @@ def set_unknown_group_count(results, sdk_name: str, count: int) -> None:
     item["unknown_group_count"] = max(item.get("unknown_group_count", 0), count)
 
 
-def scan_content(text: str, source: str, signatures: dict, results) -> None:
+def scan_content_matches(text: str, source: str, compiled_signatures: list[dict]) -> list[tuple[str, str, str, str]]:
     lowered = text.lower()
-    for sdk_name, meta in signatures.items():
-        category = meta.get("category", "unknown")
-        patterns = meta.get("patterns", [])
-        for pat in patterns:
-            m = re.search(pat, lowered, re.IGNORECASE)
+    matches = []
+    for item in compiled_signatures:
+        for pattern in item["patterns"]:
+            m = pattern.search(lowered)
             if m:
                 start = max(0, m.start() - 50)
                 end = min(len(text), m.end() + 140)
                 snippet = text[start:end].replace("\n", " ")
-                add_evidence(results, sdk_name, category, source, snippet)
+                matches.append((item["sdk_name"], item["category"], source, snippet))
                 break
+    return matches
+
+
+def scan_content(text: str, source: str, compiled_signatures: list[dict], results) -> None:
+    for sdk_name, category, source_name, snippet in scan_content_matches(text, source, compiled_signatures):
+        add_evidence(results, sdk_name, category, source_name, snippet)
 
 
 def extract_package_namespaces(text: str, max_hits: Optional[int] = None) -> list[str]:
@@ -469,24 +532,24 @@ def add_unknown_namespace_candidates(
             )
 
 
-def scan_ios_framework_names(root: Path, signatures: dict, results) -> None:
+def scan_ios_framework_names(root: Path, compiled_signatures: list[dict], results) -> None:
     seen = set()
     for framework_dir in root.rglob("*.framework"):
         if framework_dir.is_dir():
             rel = str(framework_dir.relative_to(root))
             if rel not in seen:
                 seen.add(rel)
-                scan_content(framework_dir.name, f"framework-name:{rel}", signatures, results)
+                scan_content(framework_dir.name, f"framework-name:{rel}", compiled_signatures, results)
 
     for framework_dir in root.rglob("*.xcframework"):
         if framework_dir.is_dir():
             rel = str(framework_dir.relative_to(root))
             if rel not in seen:
                 seen.add(rel)
-                scan_content(framework_dir.name, f"framework-name:{rel}", signatures, results)
+                scan_content(framework_dir.name, f"framework-name:{rel}", compiled_signatures, results)
 
 
-def scan_android_library_names(root: Path, signatures: dict, results) -> None:
+def scan_android_library_names(root: Path, compiled_signatures: list[dict], results) -> None:
     lib_root = root / "lib"
     if not lib_root.exists():
         return
@@ -497,10 +560,10 @@ def scan_android_library_names(root: Path, signatures: dict, results) -> None:
         if p.suffix.lower() not in {".so", ".jar", ".aar"}:
             continue
         rel = str(p.relative_to(root))
-        scan_content(p.name, f"android-lib:{rel}", signatures, results)
+        scan_content(p.name, f"android-lib:{rel}", compiled_signatures, results)
 
 
-def scan_android_package_namespaces(root: Path, signatures: dict, results) -> list[tuple[str, str]]:
+def scan_android_package_namespaces(root: Path, compiled_signatures: list[dict], results) -> list[tuple[str, str]]:
     hits = []
     for p in root.glob("classes*.dex"):
         if not p.is_file():
@@ -524,23 +587,23 @@ def scan_android_package_namespaces(root: Path, signatures: dict, results) -> li
                 break
 
         if namespaces:
-            scan_content("\n".join(namespaces), f"android-package:{rel}", signatures, results)
+            scan_content("\n".join(namespaces), f"android-package:{rel}", compiled_signatures, results)
     return hits
 
 
-def scan_android_asset_markers(root: Path, signatures: dict, results) -> None:
+def scan_android_asset_markers(root: Path, compiled_signatures: list[dict], results) -> None:
     for prefix, base in (("android-asset", root / "assets"), ("android-meta-inf", root / "META-INF")):
         if not base.exists():
             continue
 
         for p in base.rglob("*"):
             rel = str(p.relative_to(root))
-            scan_content(p.name, f"{prefix}:{rel}", signatures, results)
+            scan_content(p.name, f"{prefix}:{rel}", compiled_signatures, results)
 
             if p.is_file() and is_probably_text(p):
                 txt = safe_read_text(p, max_bytes=500_000)
                 if txt:
-                    scan_content(txt, f"{prefix}:{rel}", signatures, results)
+                    scan_content(txt, f"{prefix}:{rel}", compiled_signatures, results)
 
 
 def score_confidence(confidence_points: int, evidence_types: set[str]) -> tuple[int, str]:
@@ -625,28 +688,63 @@ def run_jadx(apk_path: Path, out_dir: Path) -> tuple[bool, bool, str]:
     return False, False, f"{prefix} and produced no usable output or diagnostics"
 
 
-def scan_jadx_output(jadx_dir: Path, signatures: dict, results) -> None:
+def scan_jadx_output(jadx_dir: Path, compiled_signatures: list[dict], results, progress_enabled: bool = True) -> None:
     if not jadx_dir.exists():
         return
+
+    candidates = []
     for p in jadx_dir.rglob("*"):
-        if not p.is_file():
-            continue
-        if p.suffix.lower() not in {".java", ".xml", ".json", ".txt", ".kt"}:
-            continue
+        if p.is_file() and p.suffix.lower() in {".java", ".xml", ".json", ".txt", ".kt"}:
+            candidates.append(p)
+
+    if not candidates:
+        return
+
+    def scan_one_file(p: Path) -> list[tuple[str, str, str, str]]:
         rel = str(p.relative_to(jadx_dir))
         txt = safe_read_text(p, max_bytes=5_000_000)
-        if txt:
-            scan_content(txt, f"jadx:{rel}", signatures, results)
+        if not txt:
+            return []
+        return scan_content_matches(txt, f"jadx:{rel}", compiled_signatures)
+
+    max_workers = min(32, max(4, (os.cpu_count() or 4) * 2))
+    total = len(candidates)
+    if progress_enabled:
+        print_status(f"JADX scan: {total} files, {max_workers} workers", enabled=True)
+
+    completed = 0
+    last_percent_bucket = 0
+    started = time.monotonic()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_path = {executor.submit(scan_one_file, candidate): candidate for candidate in candidates}
+        for future in concurrent.futures.as_completed(future_to_path):
+            matches = future.result()
+            for sdk_name, category, source_name, snippet in matches:
+                add_evidence(results, sdk_name, category, source_name, snippet)
+
+            completed += 1
+            should_emit, last_percent_bucket = should_emit_progress_update(
+                completed,
+                total,
+                last_percent_bucket,
+            )
+            if should_emit:
+                print_progress("scanning JADX output", completed, total, enabled=progress_enabled)
+
+    if progress_enabled:
+        elapsed = time.monotonic() - started
+        print_status(f"JADX scan complete in {elapsed:.1f}s", enabled=True)
 
 
-def scan_ios(root: Path, signatures: dict, results, progress=None, include_simple_search: bool = True) -> Optional[str]:
+def scan_ios(root: Path, signatures: dict, compiled_signatures: list[dict], results, progress=None, include_simple_search: bool = True) -> Optional[str]:
     app_namespace = infer_ios_app_namespace(root)
     if progress and app_namespace:
         progress(f"iOS: app namespace {app_namespace}")
 
     if progress:
         progress("iOS: scanning framework names")
-    scan_ios_framework_names(root, signatures, results)
+    scan_ios_framework_names(root, compiled_signatures, results)
 
     if progress:
         progress("iOS: collecting framework bundle identifiers")
@@ -670,19 +768,19 @@ def scan_ios(root: Path, signatures: dict, results, progress=None, include_simpl
         if is_probably_text(p):
             txt = safe_read_text(p)
             if txt:
-                scan_content(txt, rel, signatures, results)
+                scan_content(txt, rel, compiled_signatures, results)
 
         if should_run_strings(p):
             s = run_strings(p)
             if s:
-                scan_content(s, rel, signatures, results)
+                scan_content(s, rel, compiled_signatures, results)
     return app_namespace
 
 
-def scan_android(root: Path, signatures: dict, results, progress=None, include_simple_search: bool = True) -> Optional[str]:
+def scan_android(root: Path, signatures: dict, compiled_signatures: list[dict], results, progress=None, include_simple_search: bool = True) -> Optional[str]:
     if progress:
         progress("Android: scanning DEX package namespaces")
-    package_hits = scan_android_package_namespaces(root, signatures, results)
+    package_hits = scan_android_package_namespaces(root, compiled_signatures, results)
     app_namespace = infer_android_app_namespace(root, package_hits)
     if progress and app_namespace:
         progress(f"Android: app namespace {app_namespace}")
@@ -690,11 +788,11 @@ def scan_android(root: Path, signatures: dict, results, progress=None, include_s
 
     if progress:
         progress("Android: scanning lib/ artifact names")
-    scan_android_library_names(root, signatures, results)
+    scan_android_library_names(root, compiled_signatures, results)
 
     if progress:
         progress("Android: scanning assets/ and META-INF markers")
-    scan_android_asset_markers(root, signatures, results)
+    scan_android_asset_markers(root, compiled_signatures, results)
 
     if not include_simple_search:
         if progress:
@@ -705,17 +803,17 @@ def scan_android(root: Path, signatures: dict, results, progress=None, include_s
         progress("Android: scanning filenames, text files, and extracted strings")
     for p in collect_files(root):
         rel = str(p.relative_to(root))
-        scan_content(p.name, f"filename:{rel}", signatures, results)
+        scan_content(p.name, f"filename:{rel}", compiled_signatures, results)
 
         if is_probably_text(p):
             txt = safe_read_text(p)
             if txt:
-                scan_content(txt, rel, signatures, results)
+                scan_content(txt, rel, compiled_signatures, results)
 
         if should_run_strings(p):
             s = run_strings(p)
             if s:
-                scan_content(s, rel, signatures, results)
+                scan_content(s, rel, compiled_signatures, results)
     return app_namespace
 
 
@@ -848,9 +946,9 @@ def main() -> int:
     parser.add_argument("--use-jadx", action="store_true", help="Use JADX for Android APKs if available")
     parser.add_argument("--quiet", action="store_true", help="Suppress status updates on stderr")
     parser.add_argument(
-        "--no-simple-search",
+        "--simple-text-search",
         action="store_true",
-        help="Skip broad filename, text-file, and extracted-strings fallback scanning",
+        help="Enable broad filename, text-file, and extracted-strings fallback scanning",
     )
     args = parser.parse_args()
 
@@ -875,6 +973,7 @@ def main() -> int:
 
     try:
         signatures = load_signatures(sig_path)
+        compiled_signatures = compile_signatures(signatures)
     except Exception as e:
         print(f"Failed to load signatures: {e}", file=sys.stderr)
         return 2
@@ -920,18 +1019,20 @@ def main() -> int:
             scan_ios(
                 scan_root,
                 signatures,
+                compiled_signatures,
                 results,
                 progress=status,
-                include_simple_search=not args.no_simple_search,
+                include_simple_search=args.simple_text_search,
             )
         else:
             status("starting Android scan")
             scan_android(
                 scan_root,
                 signatures,
+                compiled_signatures,
                 results,
                 progress=status,
-                include_simple_search=not args.no_simple_search,
+                include_simple_search=args.simple_text_search,
             )
 
             if args.use_jadx and source_apk_for_jadx is not None:
@@ -942,7 +1043,7 @@ def main() -> int:
                     print(f"Warning: {jadx_message}", file=sys.stderr)
                 if should_scan_jadx and has_jadx_output:
                     status("scanning JADX output")
-                    scan_jadx_output(jadx_out, signatures, results)
+                    scan_jadx_output(jadx_out, compiled_signatures, results, progress_enabled=not args.quiet)
 
     status(f"building summary from {len(results)} matched SDK candidates")
     rows = build_summary(results)

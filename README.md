@@ -83,12 +83,12 @@ python3 sdk_finder.py MyApp.apk --signatures signatures.json
   - Suppress phase/status updates on stderr.
   - Useful if you want completely quiet terminal behavior except for final output and warnings.
 
-- `--no-simple-search`
-  - Skip the broad fallback scan that checks:
+- `--simple-text-search`
+  - Opt in to the broad fallback scan that checks:
     - general filenames
     - likely text files
     - `strings` output from relevant files
-  - Structured scans still run, including:
+  - By default, the scanner only runs structured scans, including:
     - iOS framework and xcframework names
     - Android DEX package namespaces
     - Android `lib/` artifact names
@@ -189,10 +189,16 @@ JSON output without status lines:
 python3 sdk_finder.py MyApp.apk --signatures signatures.json --json --quiet
 ```
 
-Structured-only scan without broad text matching:
+Structured-only scan with the default behavior:
 
 ```bash
-python3 sdk_finder.py MyApp.apk --signatures signatures.json --no-simple-search
+python3 sdk_finder.py MyApp.apk --signatures signatures.json
+```
+
+Enable the broader fallback text scan:
+
+```bash
+python3 sdk_finder.py MyApp.apk --signatures signatures.json --simple-text-search
 ```
 
 Write CSV:
