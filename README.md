@@ -24,6 +24,20 @@ It currently supports:
 
 The scanner is designed to help with audit triage rather than produce a definitive software bill of materials. It combines filename, framework/library, package namespace, asset marker, manifest/config, string, and optional JADX-derived evidence into a ranked report.
 
+## Prerequisites
+
+`sdk_finder.py` only uses Python standard library modules, so there is no `requirements.txt` and no pip install step is required.
+
+Optional external tools:
+
+- `jadx`
+  - Only needed when using `--use-jadx`
+  - If `jadx` is not installed or fails, the script continues and prints a warning
+
+- `strings`
+  - Used when available for broad fallback scanning of relevant files
+  - Availability depends on your local environment
+
 ## Usage
 
 ```bash

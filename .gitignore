@@ -3,3 +3,4 @@ _agent.js
 _agentAndroidClasses.js
 _agentAndroidNetworkSignatures.js
 base.apk
+.DS_Store
